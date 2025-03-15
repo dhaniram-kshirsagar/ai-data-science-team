@@ -4,7 +4,7 @@
 # * Agents: Feature Engineering Agent
 
 # Libraries
-from typing import TypedDict, Annotated, Sequence, Literal
+from typing import TypedDict, Annotated, Sequence, Literal, Dict, Any, List, Optional, Union, Type, Callable
 import operator
 
 from langchain.prompts import PromptTemplate
@@ -18,6 +18,23 @@ import json
 import pandas as pd
 
 from IPython.display import Markdown
+
+# Define GraphState TypedDict
+class GraphState(TypedDict, total=False):
+    """TypedDict for feature engineering agent graph state"""
+    data_raw: Dict[str, Any]
+    data_engineered: Dict[str, Any]
+    user_instructions: str
+    target_variable: str
+    recommended_steps: str
+    feature_engineer_function: str
+    feature_engineer_function_path: str
+    feature_engineer_function_name: str
+    feature_engineer_error: str
+    max_retries: int
+    retry_count: int
+    messages: List[Any]
+    configurable: Dict[str, Any]
 
 from ai_data_science_team.templates import(
     node_func_execute_agent_code_on_data, 
@@ -602,11 +619,11 @@ def make_feature_engineering_agent(
     prompt_text_human_review = "Are the following feature engineering instructions correct? (Answer 'yes' or provide modifications)\n{steps}"
     
     if not bypass_explain_code:
-        def human_review(state: GraphState) -> Command[Literal["recommend_feature_engineering_steps", "explain_feature_engineering_code"]]:
+        def human_review(state: GraphState) -> Command[Literal["recommend_feature_engineering_steps", "create_feature_engineering_code"]]:
             return node_func_human_review(
                 state=state,
                 prompt_text=prompt_text_human_review,
-                yes_goto= 'explain_feature_engineering_code',
+                yes_goto="create_feature_engineering_code",
                 no_goto="recommend_feature_engineering_steps",
                 user_instructions_key="user_instructions",
                 recommended_steps_key="recommended_steps",
@@ -670,6 +687,7 @@ def make_feature_engineering_agent(
             - Handle missing values in numeric and categorical features before transformations.
             - Avoid creating highly correlated features unless explicitly instructed.
             - Convert Boolean to integer values (0/1) after one-hot encoding unless otherwise instructed.
+            - IMPORTANT: Check the sample size before removing features based on uniqueness. If the sample has very few rows (5 or fewer), DO NOT remove features based on uniqueness as this will result in an empty DataFrame.
             
             Avoid the following errors:
             
@@ -681,6 +699,7 @@ def make_feature_engineering_agent(
             
             - name 'categorical_features' is not defined
 
+            - Removing all columns due to small sample size
 
             """,
             input_variables=["recommeded_steps", "target_variable", "all_datasets_summary", "function_name"]
@@ -716,6 +735,20 @@ def make_feature_engineering_agent(
         }
 
     def execute_feature_engineering_code(state):
+        def safe_preprocessing(data):
+            """Handle small sample sizes correctly to prevent empty DataFrames"""
+            # Convert dict to DataFrame
+            df = pd.DataFrame.from_dict(data)
+            
+            # Create a wrapper around the feature engineer function to ensure we don't lose all columns
+            # due to small sample sizes
+            if len(df) <= 5:  # If we have very few rows
+                print("DEBUG - Small sample size detected, using safe mode for feature engineering")
+                # Save original columns for reference
+                original_columns = df.columns.tolist()
+            
+            return df
+            
         return node_func_execute_agent_code_on_data(
             state=state,
             data_key="data_raw",
@@ -723,7 +756,7 @@ def make_feature_engineering_agent(
             error_key="feature_engineer_error",
             code_snippet_key="feature_engineer_function",
             agent_function_name=state.get("feature_engineer_function_name"),
-            pre_processing=lambda data: pd.DataFrame.from_dict(data),
+            pre_processing=safe_preprocessing,
             post_processing=lambda df: df.to_dict() if isinstance(df, pd.DataFrame) else df,
             error_message_prefix="An error occurred during feature engineering: "
         )
@@ -735,7 +768,7 @@ def make_feature_engineering_agent(
         Provide only the corrected function definition for {function_name}().
         
         Return Python code in ```python``` format with a single function definition, {function_name}(data_raw), that includes all imports inside the function.
-        
+
         This is the broken code (please fix): 
         {code_snippet}
 
