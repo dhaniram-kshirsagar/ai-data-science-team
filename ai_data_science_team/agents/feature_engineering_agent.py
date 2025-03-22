@@ -35,6 +35,7 @@ class GraphState(TypedDict, total=False):
     retry_count: int
     messages: List[Any]
     configurable: Dict[str, Any]
+    feedback: str
 
 from ai_data_science_team.templates import(
     node_func_execute_agent_code_on_data, 
@@ -537,6 +538,7 @@ def make_feature_engineering_agent(
         feature_engineer_error: str
         max_retries: int
         retry_count: int
+        feedback: str
 
     def recommend_feature_engineering_steps(state: GraphState):
         """
@@ -583,16 +585,23 @@ def make_feature_engineering_agent(
             Previously Recommended Steps (if any):
             {recommended_steps}
             
+            Human Feedback (if any):
+            {feedback}
+            
             Below are summaries of all datasets provided:
             {all_datasets_summary}
 
+            Categorize the recommended steps into the following categories:
+            A. General Steps (based on data characteristics)
+            B. Custom Steps (based on user instructions)
+            
             Return steps as a numbered list. You can return short code snippets to demonstrate actions. But do not return a fully coded solution. The code will be generated separately by a Coding Agent.
             
             Avoid these:
             1. Do not include steps to save files.
             2. Do not include unrelated user instructions that are not related to the feature engineering.
             """,
-            input_variables=["user_instructions", "recommended_steps", "all_datasets_summary"]
+            input_variables=["user_instructions", "recommended_steps", "all_datasets_summary", "feedback"]
         )
 
         data_raw = state.get("data_raw")
@@ -602,11 +611,18 @@ def make_feature_engineering_agent(
         
         all_datasets_summary_str = "\n\n".join(all_datasets_summary)
 
+        # Get user instructions from state
+        user_instructions = state.get("user_instructions", "")
+        
+        # Log the user instructions for debugging
+        print(f"User instructions: {user_instructions}")
+        
         steps_agent = recommend_steps_prompt | llm
         recommended_steps = steps_agent.invoke({
-            "user_instructions": state.get("user_instructions"),
-            "recommended_steps": state.get("recommended_steps"),
-            "all_datasets_summary": all_datasets_summary_str
+            "user_instructions": user_instructions,
+            "recommended_steps": state.get("recommended_steps", ""),
+            "all_datasets_summary": all_datasets_summary_str,
+            "feedback": state.get("feedback", "No feedback provided.")
         }) 
         
         return {
@@ -659,35 +675,51 @@ def make_feature_engineering_agent(
 
         feature_engineering_prompt = PromptTemplate(
             template="""
-            You are a Feature Engineering Agent. Your job is to create a {function_name}() function that can be run on the data provided using the following recommended steps.
+            You are a Feature Engineering Agent. Your job is to create a Python function for feature engineering.
             
-            Recommended Steps:
+            The code should implement the list of recommended feature engineering steps:
+            
             {recommended_steps}
             
-            Use this information about the data to help determine how to feature engineer the data:
+            The name of the function should be: {function_name}
             
-            Target Variable (if provided): {target_variable}
+            The function must be a Python function that takes a pandas DataFrame as input and returns a transformed pandas DataFrame with engineered features.
             
-            Below are summaries of all datasets provided. Use this information about the data to help determine how to feature engineer the data:
+            Your function must include all necessary imports inside the function body.
+            
+            CRITICAL ERROR PREVENTION:
+            1. ALWAYS check if columns exist in the DataFrame BEFORE trying to access them
+               - Use `if 'column_name' in df.columns:` before any operation on a column
+               - Do NOT assume any specific columns exist - check first!
+               - If a required column doesn't exist, print a clear error message and skip that transformation
+            
+            Include proper error handling to ensure robustness:
+            1. Check if required columns exist before accessing them
+            2. Handle NaN and missing values
+            3. Handle categorical features appropriately
+            4. Handle numeric features appropriately
+            5. If creating datetime features, handle date conversion errors
+            
+            IMPORTANT REQUIREMENTS:
+            - The final output must include ALL columns from the original DataFrame that were successfully processed
+            - Do NOT hardcode column names - instead, detect column types dynamically
+            - Ensure any infinite values are replaced with NaN and then filled using appropriate methods
+            - Make sure all column transformations maintain the same number of rows as the original dataset
+            - Ensure that output only contains python code and comments and no other text
+            
+            DATASET INFORMATION:
+            
             {all_datasets_summary}
             
-            You can use Pandas, Numpy, and Scikit Learn libraries to feature engineer the data.
+            STEPS TO INCLUDE (IF APPLICABLE):
             
-            Return Python code in ```python``` format with a single function definition, {function_name}(data_raw), including all imports inside the function.
-
-            Return code to provide the feature engineering function:
-            
-            def {function_name}(data_raw):
-                import pandas as pd
-                import numpy as np
-                ...
-                return data_engineered
-            
-            Best Practices and Error Preventions:
-            - Handle missing values in numeric and categorical features before transformations.
-            - Avoid creating highly correlated features unless explicitly instructed.
-            - Convert Boolean to integer values (0/1) after one-hot encoding unless otherwise instructed.
-            - IMPORTANT: Check the sample size before removing features based on uniqueness. If the sample has very few rows (5 or fewer), DO NOT remove features based on uniqueness as this will result in an empty DataFrame.
+            1. Define the feature engineering function with proper comments
+            2. Handle missing values for both categorical and numeric features
+            3. Drop or handle low-information features (constant, high-cardinality, etc.)
+            4. Convert categorical variables to numeric using appropriate encoding
+            5. Create interaction features as recommended
+            6. Process the target variable: {target_variable} (if specified)
+            7. Return the processed DataFrame
             
             Avoid the following errors:
             
@@ -699,10 +731,26 @@ def make_feature_engineering_agent(
             
             - name 'categorical_features' is not defined
 
+            - Missing required column: [column_name]
+            
             - Removing all columns due to small sample size
-
+            
+            - name 'pd' is not defined
+            
+            ALWAYS START YOUR FUNCTION WITH:
+            ```python
+            def {function_name}(data):
+                # Import necessary libraries
+                import pandas as pd
+                import numpy as np
+                
+                # Make a copy of the input data to avoid modifying the original
+                df = data.copy()
+                
+                # Rest of your code...
+            ```
             """,
-            input_variables=["recommeded_steps", "target_variable", "all_datasets_summary", "function_name"]
+            input_variables=["recommended_steps", "target_variable", "all_datasets_summary", "function_name"]
         )
 
         feature_engineering_agent = feature_engineering_prompt | llm | PythonOutputParser()

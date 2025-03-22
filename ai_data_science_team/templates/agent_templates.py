@@ -520,34 +520,17 @@ def node_func_execute_agent_code_on_data(
     data = state.get(data_key)
     agent_code = state.get(code_snippet_key)
     
-    # Debug data structure
-    print(f"DEBUG - Data type: {type(data)}")
-    if isinstance(data, dict):
-        print(f"DEBUG - Data keys: {list(data.keys())}")
-        print(f"DEBUG - First key values shape: {len(list(data.values())[0]) if data and list(data.values()) else 0}")
-        print(f"DEBUG - Sample of first few values: {list(data.values())[0][:3] if data and list(data.values()) else []}")
-    
     # Preprocessing: If no pre-processing function is given, attempt a default handling
     if pre_processing is None:
         if isinstance(data, dict):
-            # Use 'columns' orientation to match the 'list' orientation used in main.py
-            print("DEBUG - Converting dict to DataFrame with columns orientation")
             df = pd.DataFrame.from_dict(data, orient='columns')
-            print(f"DEBUG - Resulting DataFrame shape: {df.shape}, columns: {df.columns.tolist()}")
-            print(f"DEBUG - First few rows:\n{df.head(2)}")
         elif isinstance(data, list):
-            print("DEBUG - Converting list of dicts to list of DataFrames with columns orientation")
             df = [pd.DataFrame.from_dict(item, orient='columns') for item in data]
         else:
             error_msg = f"Data is not a dictionary or list and no pre_processing function was provided. Type: {type(data)}"
-            print(f"DEBUG - Error: {error_msg}")
             raise ValueError(error_msg)
     else:
-        print("DEBUG - Using custom pre-processing function")
         df = pre_processing(data)
-        print(f"DEBUG - After pre-processing, data type: {type(df)}")
-        if isinstance(df, pd.DataFrame):
-            print(f"DEBUG - DataFrame shape: {df.shape}, columns: {df.columns.tolist()}")
     
     # Execute the code snippet to define the agent function
     local_vars = {}
@@ -563,51 +546,41 @@ def node_func_execute_agent_code_on_data(
     agent_error = None
     result = None
     try:
-        print(f"DEBUG - Executing agent function: {agent_function_name}")
         result = agent_function(df)
-        print(f"DEBUG - Result type after agent function: {type(result)}")
-        if isinstance(result, pd.DataFrame):
-            print(f"DEBUG - Result DataFrame shape: {result.shape}, columns: {result.columns.tolist()}")
-            print(f"DEBUG - Result DataFrame first few rows:\n{result.head(2)}")
-            
-            # CRITICAL FIX: Check if DataFrame is empty (has no columns) and restore original data if needed
-            if result.shape[1] == 0 and isinstance(df, pd.DataFrame):
-                print("DEBUG - Empty DataFrame detected! Restoring original data.")
-                # If the agent function removed all columns, keep the original data
-                result = df.copy()
-                # Add a warning note 
-                print("WARNING: Feature engineering function removed all columns due to small sample size. Original data has been preserved.")
+        
+        # CRITICAL FIX: Check if DataFrame is empty (has no columns) and restore original data if needed
+        if isinstance(result, pd.DataFrame) and result.shape[1] == 0 and isinstance(df, pd.DataFrame):
+            # If the agent function removed all columns, keep the original data
+            result = df.copy()
+            print("WARNING: Feature engineering function removed all columns due to small sample size. Original data has been preserved.")
         elif result is None:
-            print("DEBUG - WARNING: Agent function returned None")
-            
             # If None was returned and we have input data as DataFrame, use the input data
             if isinstance(df, pd.DataFrame):
-                print("DEBUG - Substituting original DataFrame for None result")
                 result = df.copy()
         
-        # Test an error
-        # if state.get("retry_count") == 0:
-        #     10/0
+        # Check for infinite values and replace with NaN, then fill NaNs with median
+        if isinstance(result, pd.DataFrame):
+            import numpy as np
+            
+            for col in result.columns:
+                if (result[col] == np.inf).any() or (result[col] == -np.inf).any():
+                    result[col] = result[col].replace([np.inf, -np.inf], np.nan)
+                
+                if result[col].isna().any():
+                    result[col] = result[col].fillna(result[col].median())
         
         # Apply post-processing if provided
         if post_processing is not None:
-            print("DEBUG - Applying post-processing")
             result = post_processing(result)
-            print(f"DEBUG - Result after post-processing: type={type(result)}")
         else:
             if isinstance(result, pd.DataFrame):
-                print("DEBUG - Converting DataFrame to dict")
                 result = result.to_dict('list')  # Use 'list' orientation for consistency with backend
-                print(f"DEBUG - Result dict keys: {list(result.keys()) if result else []}")
-            print(f"DEBUG - Final result type: {type(result)}")
         
     except Exception as e:
-        print(f"DEBUG - EXCEPTION DURING EXECUTION: {e}")
         print(e)
         agent_error = f"{error_message_prefix}{str(e)}"
     
     # Return results
-    print(f"DEBUG - Final result status - result: {'exists' if result is not None else 'None'}, error: {'exists' if agent_error else 'None'}")
     output = {result_key: result, error_key: agent_error}
     return output
 
