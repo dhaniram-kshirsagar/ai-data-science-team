@@ -7,6 +7,8 @@ import os
 import plotly.graph_objects as go
 import io
 import base64
+import json
+from datetime import datetime
 
 class SchemaResult(BaseModel):
     schema: dict
@@ -14,6 +16,14 @@ class SchemaResult(BaseModel):
     graph_image: str  # Base64 encoded image
 
 class FilePathInput(BaseModel):
+    file_path: str
+
+class SaveSchemaInput(BaseModel):
+    schema: dict
+    output_path: str = None  # Optional output path, if not provided will use default location
+
+class SaveSchemaResponse(BaseModel):
+    message: str
     file_path: str
 
 def generate_graph_image(schema):
@@ -151,6 +161,50 @@ async def build_schema_from_path(file_input: FilePathInput):
     except Exception as e:
         print(f"Error in build_schema_from_path: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Schema generation failed: {str(e)}")
+
+@app.post('/save-schema', response_model=SaveSchemaResponse, tags=["Schema Management"])
+async def save_schema(save_input: SaveSchemaInput):
+    """Save the generated schema JSON to a file on the server.
+    
+    Args:
+        save_input (SaveSchemaInput): Object containing the schema and optional output path
+        
+    Returns:
+        SaveSchemaResponse: Success message and the path where the schema was saved
+    """
+    try:
+        schema = save_input.schema
+        
+        # Create a default output path if none provided
+        if not save_input.output_path:
+            # Create schemas directory if it doesn't exist
+            schemas_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "saved_schemas")
+            os.makedirs(schemas_dir, exist_ok=True)
+            
+            # Generate a filename with timestamp
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            output_path = os.path.join(schemas_dir, f"schema_{timestamp}.json")
+        else:
+            output_path = save_input.output_path
+            
+            # Ensure the directory exists
+            os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
+            
+            # Validate the output path ends with .json
+            if not output_path.lower().endswith('.json'):
+                output_path += '.json'
+        
+        # Write the schema to the file
+        with open(output_path, 'w') as f:
+            json.dump(schema, f, indent=2)
+        
+        return {
+            'message': 'Schema saved successfully',
+            'file_path': output_path
+        }
+    except Exception as e:
+        print(f"Error in save_schema: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to save schema: {str(e)}")
 
 if __name__ == '__main__':
     import uvicorn

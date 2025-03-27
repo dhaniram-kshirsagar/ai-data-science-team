@@ -5,26 +5,14 @@ This API provides endpoints for generating Neo4j graph schemas from CSV data. It
 
 ## Endpoints
 
-### 1. POST /upload
-- **Purpose**: Upload a CSV file for schema generation
+### 1. POST /build-schema
+- **Purpose**: Generate Neo4j schema from a CSV file at a specified absolute path
 - **Request Body`:
   ```json
   {
-    "file": "CSV file data"
+    "file_path": "/absolute/path/to/file.csv"
   }
   ```
-- **Response`:
-  ```json
-  {
-    "message": "File uploaded successfully",
-    "path": "/path/to/temp/file.csv"
-  }
-  ```
-- **Errors`:
-  - 500: Internal server error during file processing
-
-### 2. GET /build-schema
-- **Purpose**: Generate Neo4j schema from uploaded CSV and return results
 - **Response`:
   ```json
   {
@@ -54,15 +42,33 @@ This API provides endpoints for generating Neo4j graph schemas from CSV data. It
   }
   ```
 - **Errors`:
-  - 400: No file uploaded
-  - 404: Schema generation failed
-  - 500: Internal server error during schema generation
+  - 400: Only CSV files are supported
+  - 404: File not found at specified path
+  - 500: Schema generation failed
 
-/Graph Model
-Upload CSV 
-Build Schema
-  getFiles already uploaded
+### 2. POST /save-schema
+- **Purpose**: Save the generated schema JSON to a file on the server
+- **Request Body`:
+  ```json
+  {
+    "schema": {
+      // Schema object
+      // Same object received from /build-schema endpoint
+    },
+    "output_path": "/optional/path/to/save/schema.json" // Optional
+  }
+  ```
+- **Response`:
+  ```json
+  {
+    "message": "Schema saved successfully",
+    "file_path": "/path/where/schema/was/saved.json"
+  }
+  ```
+- **Errors`:
+  - 500: Failed to save schema
 
-Schema Management
-Save API
-Apply Database
+## Notes
+- If no output path is provided to the /save-schema endpoint, the schema will be saved in the server's default location (./saved_schemas) with a timestamp-based filename.
+- The API automatically creates any necessary directories when saving a schema to a specified path.
+- All schema files are saved in JSON format with proper indentation for readability.

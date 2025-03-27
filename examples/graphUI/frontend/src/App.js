@@ -9,9 +9,15 @@ function App() {
   const [cypher, setCypher] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [saveMessage, setSaveMessage] = useState(null);
+  const [savePath, setSavePath] = useState('');
 
   const handleFilePathChange = (e) => {
     setFilePath(e.target.value);
+  };
+
+  const handleSavePathChange = (e) => {
+    setSavePath(e.target.value);
   };
 
   const handleGenerateFromPath = async () => {
@@ -19,6 +25,7 @@ function App() {
 
     setLoading(true);
     setError(null);
+    setSaveMessage(null);
 
     try {
       const { data } = await axios.post('http://localhost:8000/build-schema', {
@@ -29,6 +36,27 @@ function App() {
       setCypher(data.cypher);
     } catch (err) {
       setError(err.response?.data?.detail || 'An error occurred');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSaveSchema = async () => {
+    if (!schema) return;
+
+    setLoading(true);
+    setError(null);
+    setSaveMessage(null);
+
+    try {
+      const { data } = await axios.post('http://localhost:8000/save-schema', {
+        schema: schema,
+        output_path: savePath || null
+      });
+
+      setSaveMessage(data.message);
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Failed to save schema');
     } finally {
       setLoading(false);
     }
@@ -92,9 +120,29 @@ function App() {
       </div>
 
       {error && <div className="error" style={{ color: 'red', marginTop: '10px' }}>{error}</div>}
+      {saveMessage && <div className="success" style={{ color: 'green', marginTop: '10px' }}>{saveMessage}</div>}
       
       {schema && (
         <div>
+          <div style={{ marginBottom: '20px', marginTop: '20px' }}>
+            <h3>Save Schema to File</h3>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <input 
+                type="text" 
+                value={savePath} 
+                onChange={handleSavePathChange} 
+                placeholder="Enter save path (optional)"
+                style={{ minWidth: '300px' }}
+              />
+              <button onClick={handleSaveSchema} disabled={loading}>
+                {loading ? 'Saving...' : 'Save Schema'}
+              </button>
+            </div>
+            <div style={{ fontSize: '0.8rem', marginTop: '5px', color: '#666' }}>
+              If no path is provided, the schema will be saved in the server's default location.
+            </div>
+          </div>
+
           {renderSchema()}
           <div>
             <h2>Graph Visualization</h2>
