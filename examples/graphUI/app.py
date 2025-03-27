@@ -171,6 +171,50 @@ async def get_schema():
         'graph_image': graph_image
     }
 
+@app.get('/build-schema', response_model=SchemaResult, tags=["Generate and Schema Retrieval"])
+async def build_schema():
+    """Generate Neo4j schema from uploaded CSV file and return the results.
+    
+    Returns:
+        SchemaResult: Generated schema, Cypher statements, and graph visualization
+    """
+    if not agent_instance:
+        raise HTTPException(status_code=400, detail='No file uploaded')
+
+    try:
+        # Generate the schema
+        response = agent_instance.invoke_agent()
+        
+        # Get the generated schema and cypher
+        schema = agent_instance.get_schema()
+        if not schema:
+            raise HTTPException(status_code=404, detail='Schema generation failed')
+            
+        cypher = agent_instance.get_cypher() or ""
+        
+        # Generate graph image if schema is available
+        try:
+            graph_image = generate_graph_image(schema) if schema else ""
+        except Exception as img_err:
+            print(f"Error generating graph image: {str(img_err)}")
+            graph_image = ""
+        
+        # Debug logging
+        print(f"Schema: {schema}")
+        print(f"Graph image generated: {bool(graph_image)}")
+        print(f"Image length: {len(graph_image) if graph_image else 0}")
+            
+        return {
+            'schema': schema,
+            'cypher': cypher,
+            'graph_image': graph_image
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error in build_schema: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Schema generation failed: {str(e)}")
+
 if __name__ == '__main__':
     import uvicorn
     uvicorn.run(app, host='0.0.0.0', port=8000)

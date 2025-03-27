@@ -23,16 +23,39 @@ This API provides endpoints for generating Neo4j graph schemas from CSV data. It
 - **Errors`:
   - 500: Internal server error during file processing
 
-### 2. POST /generate-schema
-- **Purpose`: Generate Neo4j schema from uploaded CSV
+### 2. GET /build-schema
+- **Purpose**: Generate Neo4j schema from uploaded CSV and return results
 - **Response`:
   ```json
   {
-    "message": "Schema generated successfully"
+    "schema": {
+      "nodes": [
+        {
+          "label": "NodeType",
+          "properties": [
+            {
+              "name": "propertyName",
+              "type": "dataType",
+              "constraints": ["constraintType"]
+            }
+          ]
+        }
+      ],
+      "relationships": [],
+      "indexes": [
+        {
+          "label": "NodeType",
+          "properties": ["propertyName"]
+        }
+      ]
+    },
+    "cypher": "CREATE (...) // Generated Cypher statements",
+    "graph_image": "base64_encoded_image"
   }
   ```
 - **Errors`:
   - 400: No file uploaded
+  - 404: Schema generation failed
   - 500: Internal server error during schema generation
 
 ### 3. GET /get-schema

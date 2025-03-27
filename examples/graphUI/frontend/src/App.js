@@ -30,8 +30,7 @@ function App() {
         },
       });
 
-      const { data: schemaData } = await axios.post('http://localhost:8000/generate-schema');
-      const { data } = await axios.get('http://localhost:8000/get-schema');
+      const { data } = await axios.get('http://localhost:8000/build-schema');
 
       setSchema(data.schema);
       setCypher(data.cypher);
