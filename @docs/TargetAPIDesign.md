@@ -1,78 +1,57 @@
-# Schema Generation Workflow Documentation
+# Graph Schema API Design
 
-## Overview
-This document describes the API endpoints and workflow for generating and managing graph schemas.
+## Step 1: Build Schema
 
-## Workflow Steps
-1. **Schema Generation**
-   - Accepts multiple file paths
-   - Parses files and samples data
-   - Calls LLM to generate initial schema
+### Requirements:
+- Takes path of uploaded file
+- Expects uploaded file and GraphSchemaAgent created with it
+- Returns Schema and Cypher
 
-2. **Schema Retrieval**
-   - Returns current schema in JSON format
+### API Endpoint:
+`POST /build-schema`
 
-3. **Schema Feedback**
-   - Accepts user feedback on schema
-   - Modifies schema based on feedback
-
-4. **Schema Confirmation**
-   - Marks schema as finalized
-
-5. **Schema Saving**
-   - Saves confirmed schema to specified path
-
-## Sequence Diagram
-
-```mermaid
-sequenceDiagram
-    participant User
-    participant API
-    participant LLM
-    participant Storage
-
-    User->>API: POST /api/schema/generate
-    API->>LLM: Generate Schema
-    LLM-->>API: Return Schema
-    API-->>User: OK/Error
-
-    User->>API: GET /api/schema
-    API-->>User: Return Schema
-
-    User->>API: POST /api/schema/feedback
-    API->>LLM: Modify Schema
-    LLM-->>API: Return Updated Schema
-    API-->>User: OK
-
-    User->>API: POST /api/schema/confirm
-    API-->>User: OK
-
-    User->>API: POST /api/schema/save
-    API->>Storage: Save Schema
-    API-->>User: OK
+### Request:
+```json
+{
+  "file_path": "/path/to/uploaded/file.csv"
+}
 ```
 
-## API Endpoints
+### Response:
+```json
+{
+  "schema": {
+    "nodes": [],
+    "relationships": [],
+    "indexes": []
+  },
+  "cypher": "CREATE ..."
+}
+```
 
-### POST /api/schema/generate
-- **Purpose**: Generate initial schema
-- **Input**: List of file paths
-- **Response**: Status (OK/Error)
+## Step 2: Enhance GraphSchemaAgent
 
-### GET /api/schema
-- **Purpose**: Retrieve current schema
-- **Response**: Schema in JSON format
+### Requirements:
+- Modify GraphSchemaAgent to handle multiple CSV files
+- Update API to accept directory paths
 
-### POST /api/schema/feedback
-- **Purpose**: Provide schema feedback
-- **Input**: Feedback and modification instructions
-- **Response**: Status (OK)
+### API Endpoint:
+`POST /build-schema-from-directory`
 
-### POST /api/schema/confirm
-- **Purpose**: Confirm final schema
-- **Response**: Status (OK)
+### Request:
+```json
+{
+  "directory_path": "/path/to/uploaded/files"
+}
+```
 
-### POST /api/schema/save
-- **Purpose**: Save confirmed schema
-- **Input**: Destination path
-- **Response**: Status (OK)
+### Response:
+```json
+{
+  "schema": {
+    "nodes": [],
+    "relationships": [],
+    "indexes": []
+  },
+  "cypher": "CREATE ..."
+}

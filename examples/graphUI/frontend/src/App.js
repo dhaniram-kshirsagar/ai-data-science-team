@@ -4,33 +4,26 @@ import SyntaxHighlighter from 'react-syntax-highlighter';
 import { docco } from 'react-syntax-highlighter/dist/esm/styles/hljs';
 
 function App() {
-  const [file, setFile] = useState(null);
+  const [filePath, setFilePath] = useState('');
   const [schema, setSchema] = useState(null);
   const [cypher, setCypher] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  const handleFileChange = (e) => {
-    setFile(e.target.files[0]);
+  const handleFilePathChange = (e) => {
+    setFilePath(e.target.value);
   };
 
-  const handleUpload = async () => {
-    if (!file) return;
+  const handleGenerateFromPath = async () => {
+    if (!filePath) return;
 
     setLoading(true);
     setError(null);
 
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-
-      await axios.post('http://localhost:8000/upload', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
+      const { data } = await axios.post('http://localhost:8000/build-schema', {
+        file_path: filePath
       });
-
-      const { data } = await axios.get('http://localhost:8000/build-schema');
 
       setSchema(data.schema);
       setCypher(data.cypher);
@@ -81,41 +74,49 @@ function App() {
   return (
     <div className="App">
       <h1>Graph Schema Generator</h1>
-      <div>
-        <input type="file" accept=".csv" onChange={handleFileChange} />
-        <button onClick={handleUpload} disabled={!file || loading}>
-          {loading ? 'Processing...' : 'Upload & Generate Schema'}
-        </button>
+      
+      <div style={{ marginBottom: '20px' }}>
+        <h3>Provide a File Path</h3>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <input 
+            type="text" 
+            value={filePath} 
+            onChange={handleFilePathChange} 
+            placeholder="Enter absolute path to CSV file"
+            style={{ minWidth: '300px' }}
+          />
+          <button onClick={handleGenerateFromPath} disabled={!filePath || loading}>
+            {loading ? 'Processing...' : 'Generate Schema from Path'}
+          </button>
+        </div>
       </div>
 
-      {error && <div className="error">{error}</div>}
+      {error && <div className="error" style={{ color: 'red', marginTop: '10px' }}>{error}</div>}
+      
       {schema && (
-    <div>
-            {console.log('Image data:', schema.graph_image)}
-
-        {renderSchema()}
         <div>
+          {renderSchema()}
+          <div>
             <h2>Graph Visualization</h2>
-            {console.log('Image data:', schema.graph_image)}
-
             {schema.graph_image && (
-                <img 
-                    src={`data:image/png;base64,${schema.graph_image.trim()}`} 
-                    alt="Graph visualization"
-                    style={{ maxWidth: '100%' }}
-                    onError={(e) => {
-                        console.error('Image failed to load', e);
-                        console.log('Image data:', schema.graph_image.slice(0, 100));
-                    }}
-                />
+              <img 
+                src={`data:image/png;base64,${schema.graph_image.trim()}`} 
+                alt="Graph visualization"
+                style={{ maxWidth: '100%' }}
+                onError={(e) => {
+                  console.error('Image failed to load', e);
+                  console.log('Image data:', schema.graph_image.slice(0, 100));
+                }}
+              />
             )}
-        </div>
-        <h2>Generated Schema JSON</h2>
-        <SyntaxHighlighter language="json" style={docco}>
+          </div>
+          <h2>Generated Schema JSON</h2>
+          <SyntaxHighlighter language="json" style={docco}>
             {JSON.stringify(schema, null, 2)}
-        </SyntaxHighlighter>
-    </div>
-)}
+          </SyntaxHighlighter>
+        </div>
+      )}
+      
       {cypher && (
         <div>
           <h2>Generated Cypher</h2>

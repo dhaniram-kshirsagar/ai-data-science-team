@@ -58,19 +58,11 @@ This API provides endpoints for generating Neo4j graph schemas from CSV data. It
   - 404: Schema generation failed
   - 500: Internal server error during schema generation
 
-### 3. GET /get-schema
-- **Purpose`: Retrieve generated schema and Cypher statements
-- **Response`:
-  ```json
-  {
-    "schema": {
-      "nodes": [],
-      "relationships": []
-    },
-    "cypher": "CREATE ...",
-    "graph_image": "base64 encoded image"
-  }
-  ```
-- **Errors`:
-  - 400: No file uploaded
-  - 404: Schema not generated
+/Graph Model
+Upload CSV 
+Build Schema
+  getFiles already uploaded
+
+Schema Management
+Save API
+Apply Database

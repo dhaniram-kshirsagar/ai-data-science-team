@@ -1,25 +1,20 @@
-from fastapi import FastAPI, File, UploadFile, HTTPException
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from ai_data_science_team.agents.graph_schema_agent import GraphSchemaAgent
 from langchain_openai import ChatOpenAI
 import os
-import tempfile
 import plotly.graph_objects as go
 import io
 import base64
-
-class UploadResponse(BaseModel):
-    message: str
-    path: str
-
-class SchemaResponse(BaseModel):
-    message: str
 
 class SchemaResult(BaseModel):
     schema: dict
     cypher: str
     graph_image: str  # Base64 encoded image
+
+class FilePathInput(BaseModel):
+    file_path: str
 
 def generate_graph_image(schema):
     """Generate Plotly graph image from schema"""
@@ -95,93 +90,35 @@ llm = ChatOpenAI(
     temperature=0
 )
 
-agent_instance = None
-
-@app.post('/upload', response_model=UploadResponse, tags=["File Operations"])
-async def upload_file(file: UploadFile = File(...)):
-    """Upload a CSV file for schema generation.
+@app.post('/build-schema', response_model=SchemaResult, tags=["Generate and Schema Retrieval"])
+async def build_schema_from_path(file_input: FilePathInput):
+    """Generate Neo4j schema from a file at the specified absolute path and return the results.
     
     Args:
-        file (UploadFile): The CSV file to upload
+        file_input (FilePathInput): Object containing the absolute file path
         
-    Returns:
-        UploadResponse: Message and temporary file path
-    """
-    try:
-        # Save uploaded file to temp location
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.csv') as temp_file:
-            contents = await file.read()
-            temp_file.write(contents)
-            temp_path = temp_file.name
-
-        # Initialize agent with uploaded file
-        global agent_instance
-        agent_instance = GraphSchemaAgent(
-            model=llm,
-            csv_path=temp_path,
-            log=True,
-            log_path='logs'
-        )
-
-        return {'message': 'File uploaded successfully', 'path': temp_path}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post('/generate-schema', response_model=SchemaResponse, tags=["Schema Generation"])
-async def generate_schema():
-    """Generate Neo4j schema from uploaded CSV file.
-    
-    Returns:
-        SchemaResponse: Success message
-    """
-    if not agent_instance:
-        raise HTTPException(status_code=400, detail='No file uploaded')
-
-    try:
-        response = agent_instance.invoke_agent()
-        return {'message': 'Schema generated successfully'}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get('/get-schema', response_model=SchemaResult, tags=["Schema Retrieval"])
-async def get_schema():
-    """Retrieve generated schema and Cypher statements.
-    
-    Returns:
-        SchemaResult: Generated schema and Cypher statements
-    """
-    if not agent_instance:
-        raise HTTPException(status_code=400, detail='No file uploaded')
-
-    schema = agent_instance.get_schema()
-    cypher = agent_instance.get_cypher() or ""
-    graph_image = generate_graph_image(schema) if schema else ""
-
-    # Debug logging
-    print(f"Schema: {schema}")
-    print(f"Graph image generated: {bool(graph_image)}")
-    print(f"Image length: {len(graph_image)}")
-    
-    if not schema:
-        raise HTTPException(status_code=404, detail='Schema not generated')
-
-    return {
-        'schema': schema,
-        'cypher': cypher,
-        'graph_image': graph_image
-    }
-
-@app.get('/build-schema', response_model=SchemaResult, tags=["Generate and Schema Retrieval"])
-async def build_schema():
-    """Generate Neo4j schema from uploaded CSV file and return the results.
-    
     Returns:
         SchemaResult: Generated schema, Cypher statements, and graph visualization
     """
-    if not agent_instance:
-        raise HTTPException(status_code=400, detail='No file uploaded')
-
     try:
+        file_path = file_input.file_path
+        
+        # Validate file exists
+        if not os.path.exists(file_path):
+            raise HTTPException(status_code=404, detail=f"File not found at path: {file_path}")
+            
+        # Validate file is a CSV
+        if not file_path.lower().endswith('.csv'):
+            raise HTTPException(status_code=400, detail="Only CSV files are supported")
+        
+        # Initialize agent with the provided file path
+        agent_instance = GraphSchemaAgent(
+            model=llm,
+            csv_path=file_path,
+            log=True,
+            log_path='logs'
+        )
+        
         # Generate the schema
         response = agent_instance.invoke_agent()
         
@@ -212,7 +149,7 @@ async def build_schema():
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Error in build_schema: {str(e)}")
+        print(f"Error in build_schema_from_path: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Schema generation failed: {str(e)}")
 
 if __name__ == '__main__':
