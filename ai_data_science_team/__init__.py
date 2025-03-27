@@ -1,10 +1,10 @@
 from ai_data_science_team.agents import (
     DataCleaningAgent,
-    DataLoaderToolsAgent,
     DataVisualizationAgent,
     SQLDatabaseAgent,
     DataWranglingAgent,
     FeatureEngineeringAgent,
+    GraphSchemaAgent
 )
 
 from ai_data_science_team.ds_agents import (

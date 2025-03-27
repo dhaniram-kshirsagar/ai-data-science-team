@@ -1,0 +1,7 @@
+employee_id,first_name,last_name,department_id,manager_id,hire_date,salary,role
+E001,John,Doe,D101,E005,2023-01-15,75000,Software Engineer
+E002,Jane,Smith,D102,E006,2023-02-01,85000,Senior Developer
+E003,Bob,Johnson,D101,E005,2023-03-10,72000,Software Engineer
+E004,Alice,Williams,D102,E006,2023-04-01,90000,Tech Lead
+E005,Mike,Brown,D101,,2022-12-01,110000,Engineering Manager
+E006,Sarah,Davis,D102,,2022-11-15,115000,Engineering Manager
